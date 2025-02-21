@@ -32,3 +32,6 @@ dist-ssr
 # Build artifacts
 build/
 coverage/
+
+# Vite
+.vite/
