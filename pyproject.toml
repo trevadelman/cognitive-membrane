@@ -1,0 +1,27 @@
+[project]
+name = "cognitive-membrane"
+version = "0.1.0"
+description = "An ambient layer of intelligence that understands and adapts to your thought processes"
+requires-python = ">=3.8"
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+addopts = "-v --cov=src --cov-report=term-missing"
+
+[tool.pylint.messages_control]
+disable = [
+    "C0111",  # missing-docstring
+    "C0103",  # invalid-name
+    "C0330",  # bad-continuation
+    "C0326",  # bad-whitespace
+]
+
+[tool.pylint.format]
+max-line-length = 88  # Match black's default line length
+
+[tool.black]
+line-length = 88
+target-version = ['py38']
+include = '\.pyi?$'
