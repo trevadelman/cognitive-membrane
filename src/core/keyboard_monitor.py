@@ -37,13 +37,9 @@ class KeyboardMonitor:
         self._is_running = True
         
         try:
-            # TODO: Implement system-specific keyboard monitoring
-            # We'll need to:
-            # 1. Set up keyboard hooks using appropriate system API
-            # 2. Create an event loop to process keyboard events
-            # 3. Convert system events to KeyboardEvent objects
-            # 4. Call registered handlers with events
-            pass
+            # System-specific keyboard monitoring is implemented in platform-specific classes
+            # like MacOSKeyboardMonitor. This base class provides the interface.
+            raise NotImplementedError("Keyboard monitoring must be implemented by platform-specific classes")
         except Exception as e:
             self._is_running = False
             raise RuntimeError(f"Failed to start keyboard monitor: {e}")
@@ -54,7 +50,7 @@ class KeyboardMonitor:
             return
             
         self._is_running = False
-        # TODO: Implement cleanup of system-specific resources
+            # System-specific cleanup is handled by platform-specific classes
         
     def register_handler(self, event_type: str, handler: Callable) -> None:
         """Register a handler for keyboard events.
@@ -143,8 +139,15 @@ class KeyboardEventProcessor:
         Args:
             event: The keyboard event to handle
         """
-        # TODO: Implement key press processing
-        pass
+        """Process key press events.
+        
+        This method should be implemented by platform-specific classes to handle
+        key press events in a way appropriate for that platform.
+        
+        Args:
+            event: The keyboard event to process
+        """
+        raise NotImplementedError("Key press processing must be implemented by platform-specific classes")
         
     def _on_key_release(self, event: KeyboardEvent) -> None:
         """Handle key release events.
@@ -152,5 +155,12 @@ class KeyboardEventProcessor:
         Args:
             event: The keyboard event to handle
         """
-        # TODO: Implement key release processing
-        pass
+        """Process key release events.
+        
+        This method should be implemented by platform-specific classes to handle
+        key release events in a way appropriate for that platform.
+        
+        Args:
+            event: The keyboard event to process
+        """
+        raise NotImplementedError("Key release processing must be implemented by platform-specific classes")

@@ -7,6 +7,7 @@ user's cognitive flow through their typing behavior.
 """
 
 import asyncio
+import sys
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from typing import List, Optional, Dict
@@ -108,11 +109,51 @@ class EnhancedTypingMonitor:
         except Exception as e:
             print(f"Error in enhanced typing monitor: {e}")
             
+    def _on_key_press(self, event) -> None:
+        """Handle key press events.
+        
+        Args:
+            event: The keyboard event to handle
+        """
+        self.current_key = event.key
+        self.key_press_time = event.timestamp
+        
+    def _on_key_release(self, event) -> None:
+        """Handle key release events.
+        
+        Args:
+            event: The keyboard event to handle
+        """
+        if self.current_key == event.key:
+            duration = (event.timestamp - self.key_press_time).total_seconds()
+            keystroke = KeyStroke(
+                key=event.key,
+                timestamp=self.key_press_time,
+                duration=duration
+            )
+            self._process_keystroke(keystroke)
+            self.current_key = None
+            self.key_press_time = None
+            
     async def _sample_typing(self) -> None:
         """Sample current typing activity."""
-        # TODO: Implement actual keyboard event monitoring
-        # This will be implemented using system-specific keyboard hooks
-        pass
+        # Initialize keyboard monitor based on platform
+        if sys.platform == 'darwin':
+            from .macos_keyboard_monitor import MacOSKeyboardMonitor
+            self.keyboard_monitor = MacOSKeyboardMonitor()
+        else:
+            raise NotImplementedError(f"Platform {sys.platform} not supported yet")
+            
+        # Initialize key tracking
+        self.current_key = None
+        self.key_press_time = None
+        
+        # Register keyboard event handlers
+        self.keyboard_monitor.register_handler('press', self._on_key_press)
+        self.keyboard_monitor.register_handler('release', self._on_key_release)
+        
+        # Start keyboard monitoring
+        await self.keyboard_monitor.start()
         
     def _process_keystroke(self, keystroke: KeyStroke) -> None:
         """Process a new keystroke event.

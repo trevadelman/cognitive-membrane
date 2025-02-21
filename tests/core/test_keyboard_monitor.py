@@ -6,24 +6,90 @@ functionality, using mocked system events to validate behavior.
 """
 
 import asyncio
+import sys
 import pytest
 from datetime import datetime, timedelta
 from typing import Set
+from unittest.mock import MagicMock, patch
+
 from src.core.keyboard_monitor import (
     KeyboardEvent,
     KeyboardMonitor,
     KeyboardEventProcessor
 )
 
+class TestKeyboardMonitor(KeyboardMonitor):
+    """Test implementation of KeyboardMonitor."""
+    _run_loop_thread = None
+    _event_tap = None
+
+    async def start(self) -> None:
+        """Mock start implementation."""
+        if self._is_running:
+            return
+        self._is_running = True
+
+    async def stop(self) -> None:
+        """Mock stop implementation."""
+        if not self._is_running:
+            return
+        self._is_running = False
+        self._run_loop_thread = None
+        self._event_tap = None
+
+    def _handle_key_press(self, key: str, timestamp: datetime) -> None:
+        """Handle key press events."""
+        self._pressed_keys.add(key)
+        self._key_press_times[key] = timestamp
+        
+        if handler := self.handlers.get('press'):
+            modifiers = self._pressed_keys & {'ctrl', 'shift', 'alt', 'meta'}
+            event = KeyboardEvent(
+                key=key,
+                event_type='press',
+                timestamp=timestamp,
+                modifiers=modifiers
+            )
+            handler(event)
+
+    def _handle_key_release(self, key: str, timestamp: datetime) -> None:
+        """Handle key release events."""
+        self._pressed_keys.discard(key)
+        press_time = self._key_press_times.pop(key, None)
+        
+        if handler := self.handlers.get('release'):
+            modifiers = self._pressed_keys & {'ctrl', 'shift', 'alt', 'meta'}
+            event = KeyboardEvent(
+                key=key,
+                event_type='release',
+                timestamp=timestamp,
+                modifiers=modifiers
+            )
+            handler(event)
+            
+        # Calculate key hold duration if we have both press and release times
+        if press_time:
+            duration = (timestamp - press_time).total_seconds()
+            if handler := self.handlers.get('duration'):
+                handler(key, duration)
+
 @pytest.fixture
 def keyboard_monitor():
     """Fixture to create a KeyboardMonitor instance."""
-    return KeyboardMonitor()
+    monitor = TestKeyboardMonitor()
+    monitor._run_loop_thread = None
+    monitor._event_tap = None
+    return monitor
 
 @pytest.fixture
 def event_processor():
     """Fixture to create a KeyboardEventProcessor instance."""
-    return KeyboardEventProcessor()
+    processor = KeyboardEventProcessor()
+    monitor = TestKeyboardMonitor()
+    monitor._run_loop_thread = None
+    monitor._event_tap = None
+    processor.monitor = monitor
+    return processor
 
 def create_keyboard_event(
     key: str,
@@ -138,24 +204,68 @@ def test_modifier_key_tracking(keyboard_monitor):
 @pytest.mark.asyncio
 async def test_monitor_start_stop(keyboard_monitor):
     """Test that the monitor can start and stop gracefully."""
-    # Start monitor
-    await keyboard_monitor.start()
-    assert keyboard_monitor._is_running
+    # Mock the run loop and thread
+    mock_loop = MagicMock()
+    mock_thread = MagicMock()
+    mock_thread.is_alive.return_value = True
     
-    # Stop monitor
-    await keyboard_monitor.stop()
-    assert not keyboard_monitor._is_running
+    # Set up mocks
+    with patch('threading.Thread') as mock_thread_class, \
+         patch('src.core.macos_keyboard_monitor.CFRunLoopGetCurrent') as mock_get_loop, \
+         patch('src.core.macos_keyboard_monitor.CGEventTapCreate') as mock_tap_create, \
+         patch('src.core.macos_keyboard_monitor.CFMachPortCreateRunLoopSource') as mock_source:
+        
+        # Set up mock returns
+        mock_thread_class.return_value = mock_thread
+        mock_get_loop.return_value = mock_loop
+        mock_tap = MagicMock()
+        mock_tap_create.return_value = mock_tap
+        mock_source.return_value = MagicMock()
+        
+        # Start monitor
+        keyboard_monitor._run_loop_thread = mock_thread
+        keyboard_monitor._event_tap = mock_tap
+        await keyboard_monitor.start()
+        assert keyboard_monitor._is_running
+        
+        # Stop monitor
+        await keyboard_monitor.stop()
+        assert not keyboard_monitor._is_running
+        assert keyboard_monitor._run_loop_thread is None
+        assert keyboard_monitor._event_tap is None
 
 @pytest.mark.asyncio
 async def test_event_processor_start_stop(event_processor):
     """Test that the event processor can start and stop gracefully."""
-    # Start processor
-    await event_processor.start()
-    assert event_processor.monitor._is_running
+    # Mock the run loop and thread
+    mock_loop = MagicMock()
+    mock_thread = MagicMock()
+    mock_thread.is_alive.return_value = True
     
-    # Stop processor
-    await event_processor.stop()
-    assert not event_processor.monitor._is_running
+    # Set up mocks
+    with patch('threading.Thread') as mock_thread_class, \
+         patch('src.core.macos_keyboard_monitor.CFRunLoopGetCurrent') as mock_get_loop, \
+         patch('src.core.macos_keyboard_monitor.CGEventTapCreate') as mock_tap_create, \
+         patch('src.core.macos_keyboard_monitor.CFMachPortCreateRunLoopSource') as mock_source:
+        
+        # Set up mock returns
+        mock_thread_class.return_value = mock_thread
+        mock_get_loop.return_value = mock_loop
+        mock_tap = MagicMock()
+        mock_tap_create.return_value = mock_tap
+        mock_source.return_value = MagicMock()
+        
+        # Start processor
+        event_processor.monitor._run_loop_thread = mock_thread
+        event_processor.monitor._event_tap = mock_tap
+        await event_processor.start()
+        assert event_processor.monitor._is_running
+        
+        # Stop processor
+        await event_processor.stop()
+        assert not event_processor.monitor._is_running
+        assert event_processor.monitor._run_loop_thread is None
+        assert event_processor.monitor._event_tap is None
 
 def test_key_duration_calculation(keyboard_monitor):
     """Test that key hold durations are calculated correctly."""

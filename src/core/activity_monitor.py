@@ -7,9 +7,13 @@ pattern recognition and cognitive field analysis.
 """
 
 import asyncio
+import statistics
+import sys
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Dict, List, Optional
+
+from .typing_monitor import EnhancedTypingMonitor
 
 @dataclass
 class ActivityMetrics:
@@ -55,19 +59,46 @@ class TypingMonitor:
             
     async def _sample_typing(self) -> None:
         """Sample current typing activity."""
-        # TODO: Implement actual keyboard event monitoring
-        # For now, this is a placeholder that will be implemented
-        # using system-specific keyboard monitoring
-        pass
+        # Initialize and start keyboard monitoring
+        self.typing_monitor = EnhancedTypingMonitor()
+        await self.typing_monitor.start()
     
-    def calculate_metrics(self) -> TypingPattern:
-        """Calculate current typing metrics."""
-        # TODO: Implement actual metrics calculation
-        # This will analyze the typing history to detect patterns
+    def calculate_metrics(self, window: timedelta = timedelta(minutes=5)) -> TypingPattern:
+        """Calculate current typing metrics.
+        
+        Args:
+            window: Time window to analyze
+            
+        Returns:
+            TypingPattern containing the calculated metrics
+        """
+        if not self.typing_history:
+            return TypingPattern(
+                avg_speed=0.0,
+                burst_duration=0.0,
+                pause_duration=0.0,
+                timestamp=datetime.now()
+            )
+            
+        recent_patterns = [p for p in self.typing_history 
+                         if p.timestamp > datetime.now() - window]
+        
+        if not recent_patterns:
+            return TypingPattern(
+                avg_speed=0.0,
+                burst_duration=0.0,
+                pause_duration=0.0,
+                timestamp=datetime.now()
+            )
+            
+        avg_speed = statistics.mean(p.avg_speed for p in recent_patterns)
+        avg_burst = statistics.mean(p.burst_duration for p in recent_patterns)
+        avg_pause = statistics.mean(p.pause_duration for p in recent_patterns)
+        
         return TypingPattern(
-            avg_speed=0.0,
-            burst_duration=0.0,
-            pause_duration=0.0,
+            avg_speed=avg_speed,
+            burst_duration=avg_burst,
+            pause_duration=avg_pause,
             timestamp=datetime.now()
         )
 
@@ -96,7 +127,18 @@ class FocusMonitor:
             
     async def _sample_focus(self) -> None:
         """Sample current focus state."""
-        # TODO: Implement actual window/application focus monitoring
+        # Get the currently focused window/application
+        if sys.platform == 'darwin':
+            from .macos_keyboard_monitor import MacOSKeyboardMonitor
+            # For now, we'll just return a basic structure
+            # In the future, this will use macOS-specific APIs to get window info
+            return {
+                'application': 'Unknown',
+                'window_title': 'Unknown',
+                'duration': 0.0
+            }
+        else:
+            raise NotImplementedError(f"Platform {sys.platform} not supported yet")
         # This will track which window/document has focus
         pass
     
@@ -113,26 +155,47 @@ class ToolUsageMonitor:
         """Initialize the tool usage monitor."""
         self.tool_history: List[Dict] = []
         self.active_tool: Optional[str] = None
+        self.typing_monitor: Optional[EnhancedTypingMonitor] = None
         
     async def start(self) -> None:
         """Start monitoring tool usage."""
         try:
+            # Initialize and start typing monitor
+            self.typing_monitor = EnhancedTypingMonitor()
+            await self.typing_monitor.start()
+            
+            # Start tool usage monitoring
             while True:
                 await self._sample_tool_usage()
                 await asyncio.sleep(0.1)  # 100ms sampling rate
         except Exception as e:
             print(f"Error in tool monitor: {e}")
             
-    async def _sample_tool_usage(self) -> None:
+    async def _sample_tool_usage(self) -> Dict:
         """Sample current tool usage."""
-        # TODO: Implement actual tool usage monitoring
-        # This will track which tools are being used
-        pass
+        # Get tool usage metrics from the typing monitor
+        patterns = self.typing_monitor.get_recent_patterns(window=timedelta(minutes=5))
+        
+        # For now, we'll return basic metrics
+        # In the future, this will track actual tool usage
+        return {
+            'tool_switches': len(patterns['pause_starts']),
+            'average_tool_duration': patterns['average_burst_duration'],
+            'total_active_time': sum(b.end_time - b.start_time 
+                                   for b in self.typing_monitor.bursts)
+        }
     
     def get_tool_switches(self) -> int:
         """Get the number of tool switches in the last minute."""
-        # TODO: Implement actual tool switch counting
-        return 0
+        if not self.typing_monitor:
+            return 0
+            
+        # Get tool switch metrics from the typing monitor
+        patterns = self.typing_monitor.get_recent_patterns(window=timedelta(minutes=1))
+        
+        # For now, we'll use typing pauses as a proxy for tool switches
+        # In the future, this will track actual tool switches
+        return len(patterns['pause_starts'])
 
 class CoreActivityMonitor:
     """Core activity monitoring system.
