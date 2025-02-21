@@ -21,6 +21,14 @@ class KeyStroke:
     duration: float  # How long the key was held down
 
 @dataclass
+class TypingPattern:
+    """Represents a detected typing pattern."""
+    avg_speed: float  # Characters per minute
+    burst_duration: float  # Duration of typing burst in seconds
+    pause_duration: float  # Duration of pause after burst in seconds
+    timestamp: datetime
+
+@dataclass
 class TypingBurst:
     """Represents a continuous burst of typing activity."""
     keystrokes: List[KeyStroke]

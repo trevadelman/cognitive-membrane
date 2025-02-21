@@ -8,3 +8,4 @@ pylint==3.0.3
 # System Dependencies
 pyobjc-core==10.1
 pyobjc-framework-Quartz==10.1  # For macOS keyboard monitoring
+psutil==7.0.0  # For system performance monitoring
